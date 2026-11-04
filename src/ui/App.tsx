@@ -2,7 +2,6 @@ import { useEffect, useState } from "react"
 
 import { DrillsPage } from "./DrillsPage"
 import { HistoryPage } from "./HistoryPage"
-import { Flag, Lock } from "./icons"
 import { StartScreen } from "./StartScreen"
 import { SAMPLE_PARTS } from "./samples"
 import { Workspace, type Source } from "./Workspace"
@@ -58,8 +57,8 @@ export function App() {
               go("analyze")
             }}
           >
-            <Flag />
-            <span>SwingIQ</span>
+            <span className="brand-mark" aria-hidden="true" />
+            SWINGIQ
           </a>
           <nav className="nav" aria-label="Main">
             <button type="button" aria-current={tab === "analyze" ? "page" : undefined} onClick={() => go("analyze")}>
@@ -72,9 +71,7 @@ export function App() {
               My swings
             </button>
           </nav>
-          <span className="privacy">
-            <Lock /> Free. Your video stays on your device.
-          </span>
+          <span className="status">On-device · free</span>
         </div>
       </header>
 

@@ -1,4 +1,5 @@
 import type { Analysis } from "../analysis/analyze"
+import { handsAt } from "../analysis/phases"
 import { mid } from "../analysis/series"
 import { BONES, L, type Point } from "../analysis/types"
 
@@ -37,13 +38,26 @@ export function guidesFor(a: Analysis): Guides {
   return { spine: { from: hips, to } }
 }
 
-const FLAG = "#f2b705"
+const LIME = "#c6ff3d"
+const GUIDE = "rgb(255 255 255 / 0.75)"
+
+/** The hands' path from address up to frame `i`: the tracer drawn behind the skeleton. */
+export function trailFor(a: Analysis, i: number): Point[] {
+  if (i <= a.phases.address) return []
+  return a.track.slice(a.phases.address, i + 1).map(handsAt)
+}
 
 /**
  * Draws the pose (and guides) over the video. Coordinates are video pixels;
  * the canvas is matched to the video's on-screen box (object-fit: contain).
  */
-export function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, pts: Point[] | null, guides: Guides = {}) {
+export function drawOverlay(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  pts: Point[] | null,
+  guides: Guides = {},
+  trail: Point[] = [],
+) {
   const dpr = window.devicePixelRatio || 1
   const cw = canvas.clientWidth
   const ch = canvas.clientHeight
@@ -64,10 +78,10 @@ export function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, 
   const Y = (y: number) => oy + y * s
   const line = Math.max(2, Math.min(4, 3 * s * (vh / 720)))
 
-  // Guides first, dashed, in flag yellow
+  // Guides first, dashed white: where things were at address
   ctx.save()
   ctx.setLineDash([8, 6])
-  ctx.strokeStyle = FLAG
+  ctx.strokeStyle = GUIDE
   ctx.lineWidth = 2
   if (guides.head) {
     ctx.beginPath()
@@ -88,13 +102,31 @@ export function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, 
   }
   ctx.restore()
 
+  // The tracer: the hands' path so far, glowing lime, fading in from the start
+  if (trail.length > 1) {
+    ctx.save()
+    ctx.lineCap = "round"
+    ctx.lineJoin = "round"
+    ctx.shadowColor = LIME
+    ctx.shadowBlur = 12
+    for (let k = 1; k < trail.length; k++) {
+      ctx.strokeStyle = `rgb(198 255 61 / ${0.25 + 0.75 * (k / trail.length)})`
+      ctx.lineWidth = line + 1
+      ctx.beginPath()
+      ctx.moveTo(X(trail[k - 1].x), Y(trail[k - 1].y))
+      ctx.lineTo(X(trail[k].x), Y(trail[k].y))
+      ctx.stroke()
+    }
+    ctx.restore()
+  }
+
   if (!pts) return
 
   // The current spine, solid, so it can be compared with the address line
   if (guides.spine) {
     const hips = mid(pts[L.leftHip], pts[L.rightHip])
     const shoulders = mid(pts[L.leftShoulder], pts[L.rightShoulder])
-    ctx.strokeStyle = FLAG
+    ctx.strokeStyle = GUIDE
     ctx.lineWidth = line
     ctx.beginPath()
     ctx.moveTo(X(hips.x), Y(hips.y))
@@ -104,7 +136,7 @@ export function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, 
 
   // Skeleton: a dark outline under white bones reads on any background
   ctx.lineCap = "round"
-  for (const [width, colour] of [[line + 3, "rgb(13 21 17 / 0.55)"], [line, "#ffffff"]] as const) {
+  for (const [width, colour] of [[line + 3, "rgb(0 0 0 / 0.6)"], [line, LIME]] as const) {
     ctx.strokeStyle = colour
     ctx.lineWidth = width
     ctx.beginPath()
@@ -120,13 +152,13 @@ export function drawOverlay(canvas: HTMLCanvasElement, video: HTMLVideoElement, 
     ctx.fillStyle = colour
     ctx.fill()
     ctx.lineWidth = 2
-    ctx.strokeStyle = "rgb(13 21 17 / 0.6)"
+    ctx.strokeStyle = "rgb(0 0 0 / 0.7)"
     ctx.stroke()
   }
   for (const i of [11, 12, 13, 14, 23, 24, 25, 26, 27, 28]) joint(i, line + 1, "#ffffff")
-  joint(L.leftWrist, line + 2, FLAG)
-  joint(L.rightWrist, line + 2, FLAG)
-  joint(L.nose, line + 2, FLAG)
+  joint(L.leftWrist, line + 2, LIME)
+  joint(L.rightWrist, line + 2, LIME)
+  joint(L.nose, line + 2, LIME)
 }
 
 /** A small JPEG of the current video frame, for the history list. */

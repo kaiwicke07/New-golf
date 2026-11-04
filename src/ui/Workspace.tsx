@@ -7,9 +7,9 @@ import { makePlan } from "../coach/plan"
 import { saveSwing } from "../history"
 import { trackPose } from "../pose/detect"
 import { DrillCard } from "./DrillsPage"
-import { SAMPLE_PARTS, type SamplePart } from "./samples"
 import { PauseIcon, PlayIcon, StepBack, StepForward, ViewDiagram } from "./icons"
-import { drawOverlay, frameAt, guidesFor, thumbnail } from "./overlay"
+import { drawOverlay, frameAt, guidesFor, thumbnail, trailFor } from "./overlay"
+import { SAMPLE_PARTS, type SamplePart } from "./samples"
 
 export interface Source {
   url: string
@@ -18,14 +18,13 @@ export interface Source {
   sample?: SamplePart
 }
 
-
 type Stage = "setup" | "processing" | "review"
-
 
 /** Longest stretch analysed at once; one swing takes 3–6 seconds in real time. */
 const MAX_RANGE = 20
 const PHASE_KEYS: (keyof Phases)[] = ["address", "top", "impact", "finish"]
 const SPEEDS = [0.25, 0.5, 1]
+const STATUS_TEXT = { good: "On target", ok: "Close", work: "Work on this" } as const
 
 const fmt = (t: number) => `${t.toFixed(2)} s`
 
@@ -39,7 +38,7 @@ function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
 
 /**
  * One video, three stages: choose the swing and the camera view, track the
- * pose, then review the swing with the coach's read on it.
+ * pose, then review it like a launch monitor: replay on top, readouts below.
  */
 export function Workspace({
   source,
@@ -66,7 +65,7 @@ export function Workspace({
   const [time, setTime] = useState(0)
   const [playing, setPlaying] = useState(false)
   const [speed, setSpeed] = useState(0.5)
-  const [open, setOpen] = useState<string | null>(null)
+  const [selected, setSelected] = useState<string | null>(null)
 
   const plan = useMemo(() => (analysis ? makePlan(analysis.metrics) : null), [analysis])
   const guides = useMemo(() => (analysis ? guidesFor(analysis) : {}), [analysis])
@@ -78,7 +77,7 @@ export function Workspace({
     if (!v || !c) return
     if (!analysis) return drawOverlay(c, v, null)
     const i = frameAt(analysis.times, v.currentTime)
-    drawOverlay(c, v, analysis.track[i], guides)
+    drawOverlay(c, v, analysis.track[i], guides, trailFor(analysis, i))
   }, [analysis, guides])
 
   // While playing, draw every display frame and loop inside the chosen range
@@ -234,143 +233,241 @@ export function Workspace({
 
   return (
     <div className="workspace">
-      <div className="stage-col">
-        <div className="stage">
-          <video
-            ref={video}
-            src={source.url}
-            playsInline
-            muted
-            preload="auto"
-            controls={stage === "setup"}
-            onLoadedMetadata={onLoaded}
-            onSeeked={() => stage === "review" && redraw()}
-            onPause={() => setPlaying(false)}
-          />
-          <canvas ref={canvas} aria-hidden="true" />
-          {stage === "review" && (
-            <span className="stage-badge">
-              {currentPhase ? <b>{PHASE_LABELS[currentPhase]}</b> : fmt(time - range[0])}
-            </span>
-          )}
-        </div>
+      <div className="monitor">
+        <div>
+          <div className="stage">
+            <video
+              ref={video}
+              src={source.url}
+              playsInline
+              muted
+              preload="auto"
+              controls={stage === "setup"}
+              onLoadedMetadata={onLoaded}
+              onSeeked={() => stage === "review" && redraw()}
+              onPause={() => setPlaying(false)}
+            />
+            <canvas ref={canvas} aria-hidden="true" />
+            {stage === "review" && (
+              <span className={`stage-badge ${currentPhase ? "" : "is-time"}`}>
+                {currentPhase ? PHASE_LABELS[currentPhase] : fmt(time - range[0])}
+              </span>
+            )}
+          </div>
 
-        {stage === "review" && analysis && (
-          <>
-            <div className="controls">
-              <button type="button" className="icon-btn" onClick={() => step(-1)} aria-label="Previous frame" title="Previous frame (←)">
-                <StepBack />
-              </button>
-              <button type="button" className="icon-btn is-primary" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} title="Play or pause (space)">
-                {playing ? <PauseIcon /> : <PlayIcon />}
-              </button>
-              <button type="button" className="icon-btn" onClick={() => step(1)} aria-label="Next frame" title="Next frame (→)">
-                <StepForward />
-              </button>
-              <div className="speed" role="group" aria-label="Playback speed">
-                {SPEEDS.map((s) => (
-                  <button key={s} type="button" aria-pressed={speed === s} onClick={() => setSpeed(s)}>
-                    {s === 1 ? "1×" : `${s}×`}
+          {stage === "review" && analysis && (
+            <>
+              <div className="scrub">
+                <div className="scrub-marks" aria-hidden="true">
+                  {PHASE_KEYS.map((p) => (
+                    <span
+                      key={p}
+                      className="scrub-mark"
+                      style={{ left: `${((analysis.times[analysis.phases[p]] - range[0]) / span) * 100}%` }}
+                    >
+                      <span>{PHASE_LABELS[p]}</span>
+                    </span>
+                  ))}
+                </div>
+                <input
+                  type="range"
+                  min={range[0]}
+                  max={range[1]}
+                  step={0.001}
+                  value={time}
+                  aria-label="Position in the swing"
+                  onChange={(e) => void goTo(Number(e.target.value))}
+                />
+              </div>
+              <div className="transport">
+                <button type="button" className="icon-btn" onClick={() => step(-1)} aria-label="Previous frame" title="Previous frame (←)">
+                  <StepBack />
+                </button>
+                <button type="button" className="icon-btn is-primary" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"} title="Play or pause (space)">
+                  {playing ? <PauseIcon /> : <PlayIcon />}
+                </button>
+                <button type="button" className="icon-btn" onClick={() => step(1)} aria-label="Next frame" title="Next frame (→)">
+                  <StepForward />
+                </button>
+                <div className="speed" role="group" aria-label="Playback speed">
+                  {SPEEDS.map((s) => (
+                    <button key={s} type="button" aria-pressed={speed === s} onClick={() => setSpeed(s)}>
+                      {s}×
+                    </button>
+                  ))}
+                </div>
+                <span className="time num">
+                  {fmt(time - range[0])} / {fmt(span)}
+                </span>
+              </div>
+              <div className="phases" role="group" aria-label="Jump to a moment">
+                {PHASE_KEYS.map((p, i) => (
+                  <button key={p} type="button" className="phase" aria-pressed={currentPhase === p} onClick={() => jumpPhase(p)}>
+                    <strong>{PHASE_LABELS[p]}</strong>
+                    <span className="num">
+                      {fmt(analysis.times[analysis.phases[p]] - range[0])}
+                      <span className="key-hint"> · key {i + 1}</span>
+                    </span>
                   </button>
                 ))}
               </div>
-              <span className="time num">
-                {fmt(time - range[0])} / {fmt(span)}
-              </span>
-            </div>
-            <div className="scrub">
-              <div className="scrub-marks" aria-hidden="true">
-                {PHASE_KEYS.map((p) => (
-                  <span
-                    key={p}
-                    className="scrub-mark"
-                    style={{ left: `${((analysis.times[analysis.phases[p]] - range[0]) / span) * 100}%` }}
-                  />
-                ))}
+            </>
+          )}
+        </div>
+
+        <aside className="side">
+          {stage === "setup" && (
+            <Setup
+              duration={duration}
+              range={range}
+              onRange={setRange}
+              currentTime={() => video.current?.currentTime ?? 0}
+              view={view}
+              onView={setView}
+              hand={hand}
+              onHand={setHand}
+              error={error}
+              onAnalyze={analyze}
+              onReset={onReset}
+              sample={!!source.sample}
+              onSamplePart={(part) => {
+                setRange([part.start, part.end])
+                setView(part.view)
+                if (video.current) video.current.currentTime = part.start
+              }}
+            />
+          )}
+
+          {stage === "processing" && (
+            <div className="side-block" role="status">
+              <h2>Tracking</h2>
+              <p className="big-percent num">{Math.round(progress * 100)}%</p>
+              <div className="progress" aria-hidden="true">
+                <div style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
-              <input
-                type="range"
-                min={range[0]}
-                max={range[1]}
-                step={0.001}
-                value={time}
-                aria-label="Position in the swing"
-                onChange={(e) => void goTo(Number(e.target.value))}
-              />
+              <p className="hint">Finding your joints in every frame, on this device. Nothing is uploaded.</p>
+              <button type="button" className="btn btn-small" style={{ marginTop: 16 }} onClick={() => abort.current?.abort()}>
+                Cancel
+              </button>
             </div>
-            <div className="phases" role="group" aria-label="Jump to a moment">
-              {PHASE_KEYS.map((p, i) => (
-                <button key={p} type="button" className="phase" aria-pressed={currentPhase === p} onClick={() => jumpPhase(p)}>
-                  <strong>{PHASE_LABELS[p]}</strong>
-                  <span className="num">
-                    {fmt(analysis.times[analysis.phases[p]] - range[0])}
-                    <span className="key-hint"> · key {i + 1}</span>
-                  </span>
+          )}
+
+          {stage === "review" && analysis && (
+            <>
+              <div className="side-block">
+                <span className="label">Session</span>
+                <h2>{source.name}</h2>
+                <p className="muted">
+                  {analysis.view === "face-on" ? "Face-on" : "Down the line"} ·{" "}
+                  {analysis.hand === "right" ? "Right-handed" : "Left-handed"}
+                </p>
+                <div className="tally">
+                  <div className="is-good">
+                    <b className="num">{analysis.metrics.filter((m) => m.status === "good").length}</b>
+                    <span className="label">On target</span>
+                  </div>
+                  <div className="is-ok">
+                    <b className="num">{analysis.metrics.filter((m) => m.status === "ok").length}</b>
+                    <span className="label">Close</span>
+                  </div>
+                  <div className="is-work">
+                    <b className="num">{analysis.metrics.filter((m) => m.status === "work").length}</b>
+                    <span className="label">Work on</span>
+                  </div>
+                </div>
+              </div>
+              <div className="side-block">
+                <span className="label">How to read it</span>
+                <p className="hint">
+                  Lime lines are your body; the glowing trail is the path of your hands. Dashed white marks show where
+                  your head and hips started. Measured from one camera, so treat numbers as a guide.
+                </p>
+              </div>
+              <div className="side-actions">
+                <button
+                  type="button"
+                  className="btn btn-small"
+                  onClick={() => {
+                    setAnalysis(null)
+                    setStage("setup")
+                    if (canvas.current && video.current) drawOverlay(canvas.current, video.current, null)
+                  }}
+                >
+                  Change settings
                 </button>
-              ))}
-            </div>
-          </>
-        )}
+                <button type="button" className="btn btn-primary btn-small" onClick={onReset}>
+                  Analyse another swing
+                </button>
+              </div>
+            </>
+          )}
+        </aside>
       </div>
 
-      <aside className="panel">
-        {stage === "setup" && (
-          <Setup
-            duration={duration}
-            range={range}
-            onRange={setRange}
-            currentTime={() => video.current?.currentTime ?? 0}
-            view={view}
-            onView={setView}
-            hand={hand}
-            onHand={setHand}
-            error={error}
-            onAnalyze={analyze}
-            onReset={onReset}
-            sample={!!source.sample}
-            onSamplePart={(part) => {
-              setRange([part.start, part.end])
-              setView(part.view)
-              if (video.current) video.current.currentTime = part.start
-            }}
-          />
-        )}
-
-        {stage === "processing" && (
-          <div className="card" role="status">
-            <h2>Tracking your body</h2>
-            <div className="progress" aria-hidden="true">
-              <div style={{ width: `${Math.round(progress * 100)}%` }} />
+      {stage === "review" && analysis && plan && (
+        <>
+          <section aria-labelledby="readouts-title">
+            <h2 id="readouts-title" className="visually-hidden">
+              Measurements
+            </h2>
+            <div className="readouts">
+              {analysis.metrics.map((m) => (
+                <Readout
+                  key={m.id}
+                  metric={m}
+                  selected={selected === m.id}
+                  onSelect={() => {
+                    setSelected(m.id)
+                    jumpPhase(m.phase)
+                  }}
+                />
+              ))}
             </div>
-            <p className="muted num">
-              {Math.round(progress * 100)}% · finding your joints in every frame, on this device
-            </p>
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => abort.current?.abort()}>
-              Cancel
-            </button>
-          </div>
-        )}
+          </section>
 
-        {stage === "review" && analysis && plan && (
-          <Review
-            metrics={analysis.metrics}
-            plan={plan}
-            open={open}
-            onOpen={(m) => {
-              setOpen(open === m.id ? null : m.id)
-              jumpPhase(m.phase)
-            }}
-            onShowDrills={onShowDrills}
-            onAgain={() => {
-              setAnalysis(null)
-              setStage("setup")
-              if (canvas.current && video.current) drawOverlay(canvas.current, video.current, null)
-            }}
-            onNew={onReset}
-          />
-        )}
-      </aside>
+          <section className="coach" aria-labelledby="coach-title">
+            <div className="coach-fix">
+              <span className="label">{plan.first ? "Priority fix" : "Result"}</span>
+              <h2 id="coach-title">{plan.first ? plan.first.metric.label : "Nothing major to fix"}</h2>
+              {plan.first ? (
+                <>
+                  <p>
+                    You: <b>{plan.first.metric.display}</b>. Aim: {plan.first.metric.target.toLowerCase()}.
+                  </p>
+                  <p>{plan.first.metric.why}</p>
+                  <button type="button" className="btn btn-small" onClick={() => onShowDrills(plan.first!.metric.fault!)}>
+                    All drills for this
+                  </button>
+                </>
+              ) : (
+                <p>Every check is on target or close. Keep your rhythm with the tempo drill and film again in a week.</p>
+              )}
+            </div>
+            <div className="coach-drills">
+              {(plan.first?.drills ?? []).map((d) => (
+                <DrillCard key={d.id} drill={d} />
+              ))}
+            </div>
+          </section>
+        </>
+      )}
     </div>
+  )
+}
+
+function Readout({ metric, selected, onSelect }: { metric: Metric; selected: boolean; onSelect: () => void }) {
+  return (
+    <button type="button" className={`readout is-${metric.status}`} aria-pressed={selected} onClick={onSelect}>
+      <span className="label">{metric.label}</span>
+      <span className="readout-value num">{metric.value}</span>
+      <span className="readout-unit">{metric.unit}</span>
+      <span className="readout-status">{STATUS_TEXT[metric.status]}</span>
+      <span className="readout-target">
+        Aim: {metric.target}
+        {metric.estimate && " · estimate"}
+      </span>
+      {selected && <span className="readout-why">{metric.why}</span>}
+    </button>
   )
 }
 
@@ -408,16 +505,19 @@ function Setup({
   return (
     <>
       {error && (
-        <p className="error" role="alert">
-          {error}
-        </p>
+        <div className="side-block">
+          <p className="error" role="alert">
+            {error}
+          </p>
+        </div>
       )}
-      <div className="card">
-        <h2>1. Pick one swing</h2>
+      <div className="side-block">
+        <span className="label">Step 1</span>
+        <h2>Pick one swing</h2>
         {sample ? (
           <>
-            <p className="hint">This sample clip has four swings in slow motion, filmed from both angles. Pick one:</p>
-            <div className="seg" role="group" aria-label="Sample swing">
+            <p className="hint">This sample has four slow-motion swings from both angles. Pick one:</p>
+            <div className="choice" role="group" aria-label="Sample swing">
               {SAMPLE_PARTS.map((part) => (
                 <button
                   key={part.view}
@@ -425,7 +525,7 @@ function Setup({
                   aria-pressed={view === part.view && Math.abs(start - part.start) < 0.01}
                   onClick={() => onSamplePart(part)}
                 >
-                  <strong>{part.view === "face-on" ? "Face-on swing" : "Down-the-line swing"}</strong>
+                  <strong>{part.view === "face-on" ? "Face-on" : "Down the line"}</strong>
                   <span className="num">
                     {part.start.toFixed(1)}–{part.end.toFixed(1)} s
                   </span>
@@ -434,33 +534,34 @@ function Setup({
             </div>
           </>
         ) : (
-          <p className="hint">Play the video, pause just before address, and set the start. Do the same just after the finish.</p>
+          <>
+            <p className="hint">Pause just before address and set the start; pause after the finish and set the end.</p>
+            <div className="trim">
+              <div className="trim-row">
+                <output className="num">{start.toFixed(2)}</output>
+                <button type="button" className="btn btn-small" onClick={() => onRange([Math.min(currentTime(), end - 0.5), end])}>
+                  Set start here
+                </button>
+              </div>
+              <div className="trim-row">
+                <output className="num">{end.toFixed(2)}</output>
+                <button type="button" className="btn btn-small" onClick={() => onRange([start, Math.max(currentTime(), start + 0.5)])}>
+                  Set end here
+                </button>
+              </div>
+              <p className="hint num">
+                {(end - start).toFixed(1)} s of {duration.toFixed(1)} s
+                {tooLong && " · long for one swing; trim it for a faster, more accurate read"}
+              </p>
+            </div>
+          </>
         )}
-        <div className="trim">
-          <div className="trim-row">
-            <span className="label">Start</span>
-            <output className="num">{start.toFixed(2)} s</output>
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => onRange([Math.min(currentTime(), end - 0.5), end])}>
-              Set to current frame
-            </button>
-          </div>
-          <div className="trim-row">
-            <span className="label">End</span>
-            <output className="num">{end.toFixed(2)} s</output>
-            <button type="button" className="btn btn-secondary btn-small" onClick={() => onRange([start, Math.max(currentTime(), start + 0.5)])}>
-              Set to current frame
-            </button>
-          </div>
-          <p className="hint num">
-            {(end - start).toFixed(1)} s selected of {duration.toFixed(1)} s
-            {tooLong && " · that's long for one swing; trim it for a faster, more accurate read"}
-          </p>
-        </div>
       </div>
 
-      <div className="card">
-        <h2>2. Where was the camera?</h2>
-        <div className="seg" role="group" aria-label="Camera view">
+      <div className="side-block">
+        <span className="label">Step 2</span>
+        <h2>Camera position</h2>
+        <div className="choice" role="group" aria-label="Camera view">
           {(["face-on", "down-the-line"] as View[]).map((v) => (
             <button key={v} type="button" aria-pressed={view === v} onClick={() => onView(v)}>
               <ViewDiagram view={v} />
@@ -471,113 +572,27 @@ function Setup({
         </div>
       </div>
 
-      <div className="card">
-        <h2>3. Which way do you swing?</h2>
-        <div className="seg" role="group" aria-label="Handedness">
+      <div className="side-block">
+        <span className="label">Step 3</span>
+        <h2>Handedness</h2>
+        <div className="choice" role="group" aria-label="Handedness">
           {(["right", "left"] as Hand[]).map((h) => (
             <button key={h} type="button" aria-pressed={hand === h} onClick={() => onHand(h)}>
-              <strong>{h === "right" ? "Right-handed" : "Left-handed"}</strong>
+              <strong>{h === "right" ? "Right" : "Left"}</strong>
               <span>{h === "right" ? "Target on your left" : "Target on your right"}</span>
             </button>
           ))}
         </div>
       </div>
 
-      <button type="button" className="btn btn-primary" onClick={onAnalyze} disabled={end - start < 0.5}>
-        Analyse this swing
-      </button>
-      <button type="button" className="btn btn-ghost" onClick={onReset}>
-        Choose a different video
-      </button>
-    </>
-  )
-}
-
-function Review({
-  metrics,
-  plan,
-  open,
-  onOpen,
-  onShowDrills,
-  onAgain,
-  onNew,
-}: {
-  metrics: Metric[]
-  plan: ReturnType<typeof makePlan>
-  open: string | null
-  onOpen: (m: Metric) => void
-  onShowDrills: (fault: string) => void
-  onAgain: () => void
-  onNew: () => void
-}) {
-  const count = (s: Metric["status"]) => metrics.filter((m) => m.status === s).length
-  return (
-    <>
-      <div className="card">
-        <h2>Your swing</h2>
-        <div className="summary">
-          <span className="tag tag-good">{count("good")} good</span>
-          {count("ok") > 0 && <span className="tag tag-ok">{count("ok")} close</span>}
-          {count("work") > 0 && <span className="tag tag-work">{count("work")} to work on</span>}
-        </div>
+      <div className="side-actions">
+        <button type="button" className="btn btn-primary" onClick={onAnalyze} disabled={end - start < 0.5}>
+          Analyse swing
+        </button>
+        <button type="button" className="btn btn-ghost btn-small" onClick={onReset}>
+          Choose a different video
+        </button>
       </div>
-
-      {plan.first ? (
-        <div className="card fix-first">
-          <span className="tag">Fix this first</span>
-          <h2>{plan.first.metric.label}</h2>
-          <p>
-            You: <b>{plan.first.metric.display}</b>. Aim for: {plan.first.metric.target.toLowerCase()}.
-          </p>
-          <p className="muted">{plan.first.metric.why}</p>
-          {plan.first.drills.map((d) => (
-            <DrillCard key={d.id} drill={d} />
-          ))}
-          <button type="button" className="btn btn-ghost btn-small" onClick={() => onShowDrills(plan.first!.metric.fault!)}>
-            More drills for this
-          </button>
-        </div>
-      ) : (
-        <div className="card fix-first">
-          <span className="tag">Looking good</span>
-          <h2>Nothing major to fix</h2>
-          <p className="muted">Every check is in range. Keep your rhythm with the tempo drill and film again in a week.</p>
-        </div>
-      )}
-
-      <div className="card">
-        <h2>All measurements</h2>
-        <p className="hint">Tap one to see what it means and jump to that moment.</p>
-        <ul className="metric-list">
-          {metrics.map((m) => (
-            <li key={m.id}>
-              <button type="button" className="metric" aria-expanded={open === m.id} onClick={() => onOpen(m)}>
-                <span className="metric-name">
-                  <span className={`dot dot-${m.status}`} aria-hidden="true" />
-                  {m.label}
-                  <span className="visually-hidden"> ({m.status === "good" ? "good" : m.status === "ok" ? "close" : "work on"})</span>
-                </span>
-                <span className="metric-value num">{m.display}</span>
-                <span className="metric-target">
-                  Aim: {m.target}
-                  {m.estimate && " · estimate from the camera angle"}
-                </span>
-                {open === m.id && <span className="metric-why">{m.why}</span>}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="hint">
-        Measured from one camera, so read the numbers as a guide. Film from both angles for the full picture.
-      </p>
-      <button type="button" className="btn btn-secondary" onClick={onAgain}>
-        Change settings and re-analyse
-      </button>
-      <button type="button" className="btn btn-primary" onClick={onNew}>
-        Analyse another swing
-      </button>
     </>
   )
 }

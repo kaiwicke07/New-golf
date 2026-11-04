@@ -15,11 +15,9 @@ const GROUPS: { id: string; label: string; faults: Fault[] }[] = [
 
 export function DrillCard({ drill }: { drill: Drill }) {
   return (
-    <article className="card drill">
-      <div className="drill-head">
-        <h3>{drill.name}</h3>
-      </div>
-      <p className="muted">Fixes: {drill.fixes.toLowerCase()}</p>
+    <article className="drill">
+      <span className="label">Fixes {drill.fixes.toLowerCase()}</span>
+      <h3>{drill.name}</h3>
       <ol>
         {drill.steps.map((step) => (
           <li key={step}>{step}</li>
@@ -27,13 +25,13 @@ export function DrillCard({ drill }: { drill: Drill }) {
       </ol>
       <div className="drill-meta">
         <span>
-          <b>Reps:</b> {drill.reps}
+          <b className="label">Reps</b> {drill.reps}
         </span>
         <span>
-          <b>You need:</b> {drill.kit}
+          <b className="label">You need</b> {drill.kit}
         </span>
       </div>
-      <p className="feel">Feels right when: {drill.feel}</p>
+      <p className="feel">Feels right when: {drill.feel.charAt(0).toLowerCase() + drill.feel.slice(1)}</p>
     </article>
   )
 }

@@ -36,7 +36,7 @@ export function HistoryPage({ onAnalyze }: { onAnalyze: () => void }) {
                 </p>
                 <div className="history-metrics">
                   {s.metrics.map((m) => (
-                    <span key={m.id} className={`tag tag-${m.status}`}>
+                    <span key={m.id} className={`is-${m.status}`}>
                       {m.label}: {m.display}
                     </span>
                   ))}
@@ -44,7 +44,7 @@ export function HistoryPage({ onAnalyze }: { onAnalyze: () => void }) {
               </div>
               <button
                 type="button"
-                className="btn btn-ghost btn-small"
+                className="btn btn-small"
                 onClick={() => setList(deleteSwing(s.id))}
                 aria-label={`Delete ${s.name}`}
               >

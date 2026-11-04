@@ -29,36 +29,26 @@ export const Trash = () => (
   <svg {...base}><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" /></svg>
 )
 
-/** The brand mark: a flag in a hole. */
-export const Flag = () => (
-  <svg viewBox="0 0 32 32" aria-hidden="true">
-    <rect width="32" height="32" rx="9" fill="#17663f" />
-    <path d="M12 25V7l10 4-10 4" fill="#f2b705" stroke="#f2b705" strokeWidth="1.5" strokeLinejoin="round" />
-    <path d="M12 25V7" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" />
-    <ellipse cx="12" cy="25.5" rx="5" ry="1.4" fill="#fff" opacity=".55" />
-  </svg>
-)
-
 /** Where to put the camera, seen from above: golfer, ball, target line and phone. */
 export function ViewDiagram({ view }: { view: "face-on" | "down-the-line" }) {
   const faceOn = view === "face-on"
   return (
     <svg viewBox="0 0 160 100" aria-hidden="true">
-      <line x1="10" y1="40" x2="150" y2="40" stroke="#17663f" strokeWidth="2" strokeDasharray="5 5" />
-      <text x="150" y="33" textAnchor="end" fontSize="10" fill="#5b6862" fontFamily="inherit">Target</text>
-      <polygon points="152,40 144,36 144,44" fill="#17663f" />
-      <circle cx="80" cy="40" r="4" fill="#fff" stroke="#12201a" strokeWidth="1.5" />
-      <ellipse cx="80" cy="62" rx="16" ry="9" fill="#12201a" />
-      <circle cx="80" cy="62" r="6" fill="#5b6862" />
+      <line x1="10" y1="40" x2="150" y2="40" stroke="#c6ff3d" strokeWidth="2" strokeDasharray="5 5" />
+      <text x="150" y="33" textAnchor="end" fontSize="10" fill="#8d978f" fontFamily="inherit">Target</text>
+      <polygon points="152,40 144,36 144,44" fill="#c6ff3d" />
+      <circle cx="80" cy="40" r="4" fill="#eef2ec" stroke="#050605" strokeWidth="1.5" />
+      <ellipse cx="80" cy="62" rx="16" ry="9" fill="#343c35" />
+      <circle cx="80" cy="62" r="6" fill="#8d978f" />
       {faceOn ? (
         <g>
-          <rect x="72" y="4" width="16" height="10" rx="2" fill="#f2b705" stroke="#3a2c00" strokeWidth="1.2" />
-          <path d="M80 16 L80 30" stroke="#3a2c00" strokeWidth="1.5" />
+          <rect x="72" y="4" width="16" height="10" rx="2" fill="#eef2ec" stroke="#050605" strokeWidth="1.2" />
+          <path d="M80 16 L80 30" stroke="#eef2ec" strokeWidth="1.5" />
         </g>
       ) : (
         <g>
-          <rect x="14" y="56" width="10" height="16" rx="2" fill="#f2b705" stroke="#3a2c00" strokeWidth="1.2" />
-          <path d="M26 64 L60 62" stroke="#3a2c00" strokeWidth="1.5" />
+          <rect x="14" y="56" width="10" height="16" rx="2" fill="#eef2ec" stroke="#050605" strokeWidth="1.2" />
+          <path d="M26 64 L60 62" stroke="#eef2ec" strokeWidth="1.5" />
         </g>
       )}
     </svg>

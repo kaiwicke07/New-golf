@@ -5,7 +5,7 @@ import { L, type Phases, type Point } from "./types"
  * The hands count as still below this share of the clip's top hand speed.
  * Relative, so slow-motion clips work the same as real-time ones.
  */
-const STILL = 0.08
+const STILL = 0.05
 
 /** The hands: halfway between the wrists, since both hold the club. */
 export const handsAt = (pts: Point[]) => mid(pts[L.leftWrist], pts[L.rightWrist])
@@ -75,10 +75,15 @@ export function findPhases(track: Point[][], times: number[]): PhaseResult {
   for (let i = address; i < peak; i++) if (hands[i].y < hands[top].y) top = i
   if (top - address < 2) return { ok: false, reason: "Couldn't find the backswing. Make sure the whole swing, from address, is in the clip." }
 
-  // Impact: lowest hands between the top and a moment after the speed peak
-  const window = Math.max(3, Math.round(0.12 / ((times[n - 1] - times[0]) / (n - 1) || 1 / 30)))
-  let impact = top + 1
-  for (let i = top + 1; i <= Math.min(n - 1, peak + window); i++) if (hands[i].y > hands[impact].y) impact = i
+  // Impact: from the fastest moment, follow the hands down until they stop
+  // dropping; the bottom of that descent is where the club meets the ball.
+  // (A fixed time window after the peak cut slow-motion swings short.)
+  const noise = scale * 0.02
+  let impact = Math.max(top + 1, peak)
+  for (let i = impact + 1; i < n; i++) {
+    if (hands[i].y > hands[impact].y) impact = i
+    else if (hands[i].y < hands[impact].y - noise) break
+  }
   if (impact <= top) return { ok: false, reason: "Couldn't find impact. Check that the golfer is fully in the frame." }
 
   // Finish: highest hands after impact

@@ -22,8 +22,12 @@ export type Fault =
 export interface Metric {
   id: string
   label: string
-  /** The measured value, formatted, e.g. "3.1 : 1" */
+  /** The measured value, formatted in a sentence, e.g. "3.1 : 1" */
   display: string
+  /** The value alone, short enough for a big readout, e.g. "20%" */
+  value: string
+  /** What the value is, e.g. "of shoulder width, toward the target" */
+  unit: string
   /** The range we aim for, in words */
   target: string
   status: Status
@@ -76,6 +80,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
   const tempo = grade(ratio, { good: [2.5, 3.5], ok: [2, 4.2] })
   metrics.push({
     id: "tempo",
+    value: ratio.toFixed(1) + " : 1",
+    unit: "backswing to downswing",
     label: "Tempo",
     display: `${ratio.toFixed(1)} : 1`,
     target: "About 3 : 1 (backswing to downswing)",
@@ -90,6 +96,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
   const height = grade(headDrop, { good: [-0.05, 0.14], ok: [-0.1, 0.22] })
   metrics.push({
     id: "head-height",
+    value: `${Math.round(Math.abs(headDrop) * 100)}%`,
+    unit: `of torso length, ${headDrop > 0 ? "down" : "up"}`,
     label: "Head height",
     display: `${headDrop > 0 ? "Down" : "Up"} ${Math.round(Math.abs(headDrop) * 100)}% of torso`,
     target: "Steady: a small dip is fine, rising isn't",
@@ -118,6 +126,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const arm = grade(elbow, { good: [150, 180], ok: [135, 180] })
     metrics.push({
       id: "lead-arm",
+    value: `${Math.round(elbow)}°`,
+    unit: "lead elbow, hands at shoulder height",
       label: "Lead arm in the backswing",
       display: `${Math.round(elbow)}°`,
       target: "150° or straighter as the hands pass your shoulder",
@@ -136,6 +146,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const head = grade(headShift, { good: [-0.3, 0.12], ok: [-0.45, 0.25] })
     metrics.push({
       id: "head-sway",
+    value: `${Math.round(Math.abs(headShift) * 100)}%`,
+    unit: `of shoulder width, ${headShift > 0 ? "toward" : "away from"} the target`,
       label: "Head movement",
       display: `${Math.round(Math.abs(headShift) * 100)}% of shoulder width ${headShift > 0 ? "toward" : "away from"} the target`,
       target: "Head behind the ball: no more than 12% toward the target",
@@ -152,6 +164,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const hips = grade(sway, { good: [-1, 0.15], ok: [-1, 0.3] })
     metrics.push({
       id: "hip-sway",
+    value: `${Math.round(Math.max(0, sway) * 100)}%`,
+    unit: "of shoulder width, away from the target",
       label: "Hip sway in the backswing",
       display: `${Math.round(Math.max(0, sway) * 100)}% of shoulder width`,
       target: "Under 15% of your shoulder width",
@@ -166,6 +180,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const turn = grade(narrowing, { good: [0, 0.6], ok: [0, 0.78] })
     metrics.push({
       id: "turn",
+    value: narrowing <= 0.6 ? "Full" : narrowing <= 0.78 ? "Partial" : "Short",
+    unit: "estimated from the front",
       label: "Shoulder turn",
       display: narrowing <= 0.6 ? "Full" : narrowing <= 0.78 ? "Partial" : "Short",
       target: "A full turn: shoulders look much narrower at the top",
@@ -182,6 +198,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const balance = grade(overLead, { good: [0, 0.35], ok: [0, 0.6] })
     metrics.push({
       id: "finish",
+    value: overLead <= 0.35 ? "Lead side" : overLead <= 0.6 ? "Forward" : "Back",
+    unit: "where your hips finish",
       label: "Weight at the finish",
       display: overLead <= 0.35 ? "On your lead side" : overLead <= 0.6 ? "Mostly forward" : "Hanging back",
       target: "Hips stacked over your lead foot",
@@ -198,6 +216,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const posture = grade(setup, { good: [28, 50], ok: [20, 58] })
     metrics.push({
       id: "posture",
+    value: `${Math.round(setup)}°`,
+    unit: "forward bend at address",
       label: "Posture at address",
       display: `${Math.round(setup)}° forward bend`,
       target: "Bent forward about 30–50° from the hips",
@@ -212,6 +232,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const keep = grade(lost, { good: [-100, 6], ok: [-100, 11] })
     metrics.push({
       id: "spine-kept",
+    value: `${Math.round(Math.max(0, lost))}°`,
+    unit: "of forward bend lost by impact",
       label: "Posture kept through impact",
       display: lost > 0 ? `Stood up ${Math.round(lost)}°` : "Kept it",
       target: "Lose less than 6° of forward bend by impact",
@@ -230,6 +252,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const depth = grade(hipForward, { good: [-1, 0.08], ok: [-1, 0.16] })
     metrics.push({
       id: "hip-depth",
+    value: `${Math.round(Math.max(0, hipForward) * 100)}%`,
+    unit: "of torso length, toward the ball",
       label: "Hips toward the ball",
       display: `${Math.round(Math.max(0, hipForward) * 100)}% of torso`,
       target: "Under 8% of your torso length",
@@ -243,6 +267,8 @@ export function measure({ track, times, phases, view, hand }: SwingData): Metric
     const flex = grade(knee, { good: [145, 170], ok: [135, 176] })
     metrics.push({
       id: "knee-flex",
+    value: `${Math.round(180 - knee)}°`,
+    unit: "of knee bend at address",
       label: "Knee flex at address",
       display: `${Math.round(180 - knee)}° of bend`,
       target: "A soft bend: about 10–35°",

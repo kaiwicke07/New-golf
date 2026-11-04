@@ -143,12 +143,12 @@ describe("the bundled sample swing (real MediaPipe output, face-on, slow motion)
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const { times, phases } = result.analysis
-    // From the contact sheet: address before 19 s, top around 24–25 s, impact around 26.5 s
-    expect(times[phases.address]).toBeLessThan(19.5)
+    // Checked frame by frame: takeaway starts ~18.5 s, the club reaches the ball at ~26.7 s
+    expect(times[phases.address]).toBeLessThan(18.8)
     expect(times[phases.top]).toBeGreaterThan(23.5)
     expect(times[phases.top]).toBeLessThan(25.5)
-    expect(times[phases.impact]).toBeGreaterThan(26)
-    expect(times[phases.impact]).toBeLessThan(27.2)
+    expect(times[phases.impact]).toBeGreaterThan(26.55)
+    expect(times[phases.impact]).toBeLessThan(26.85)
     expect(times[phases.finish]).toBeGreaterThan(times[phases.impact])
     console.log(result.analysis.metrics.map((m) => `${m.id}: ${m.display} (${m.status})`).join("\n"))
   })
@@ -162,12 +162,12 @@ describe("the bundled sample swing, down the line", () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     const { times, phases, metrics } = result.analysis
-    // Hands still until ~2.5 s, top around 6.5–7.5 s, lowest around 9.4 s
+    // Checked frame by frame: the club reaches the ball at ~9.3–9.4 s
     expect(times[phases.address]).toBeLessThan(3.2)
     expect(times[phases.top]).toBeGreaterThan(6)
     expect(times[phases.top]).toBeLessThan(8)
-    expect(times[phases.impact]).toBeGreaterThan(8.8)
-    expect(times[phases.impact]).toBeLessThan(9.8)
+    expect(times[phases.impact]).toBeGreaterThan(9.2)
+    expect(times[phases.impact]).toBeLessThan(9.5)
     const ids = metrics.map((m) => m.id)
     expect(ids).toEqual(expect.arrayContaining(["tempo", "posture", "spine-kept", "hip-depth", "knee-flex"]))
     expect(ids).not.toContain("lead-arm")
